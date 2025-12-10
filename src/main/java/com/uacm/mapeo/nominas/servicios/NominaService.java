@@ -1,156 +1,138 @@
 package com.uacm.mapeo.nominas.servicios;
 
+import com.uacm.mapeo.nominas.persistencia.entidades.Empleado;
+import com.uacm.mapeo.nominas.persistencia.entidades.Nomina;
+import com.uacm.mapeo.nominas.persistencia.repositorios.EmpleadoRepository;
+import com.uacm.mapeo.nominas.persistencia.repositorios.NominaRepository;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-import com.uacm.mapeo.nominas.persistencia.entidades.*;
-import com.uacm.mapeo.nominas.persistencia.repositorios.*;
 
 import java.util.List;
 import java.util.Optional;
 
 @Service
+@RequiredArgsConstructor
 public class NominaService {
 
-    private final NominaRepo nominaRepo;
-    private final EmpleadoRepo empleadoRepo;
+    private final NominaRepository nominaRepository;
+    private final EmpleadoRepository empleadoRepository;
 
-    public NominaService(NominaRepo nominaRepo, EmpleadoRepo empleadoRepo) {
-        this.nominaRepo = nominaRepo;
-        this.empleadoRepo = empleadoRepo;
+    // Obtener todas las nóminas
+    public List<Nomina> getAllNominas() {
+        return nominaRepository.findAll();
     }
 
-    private double calcularTotalNeto(Nomina n) {
-        double base = n.getDevengado() != null ? n.getDevengado().getBaseAmount() : 0.0;
-        double extras = n.getDevengado() != null ? n.getDevengado().getExtras() : 0.0;
-        double isr = n.getDeducciones() != null ? n.getDeducciones().getIsr() : 0.0;
-        return (base + extras) - isr;
+    // Obtener nómina por ID
+    public Optional<Nomina> getNominaById(Long id) {
+        return nominaRepository.findById(id);
     }
 
-    private void validar(Nomina n) {
-        if (n.getReciboId() == null || n.getReciboId().trim().isEmpty()) {
-            throw new IllegalArgumentException("reciboId es obligatorio");
-        }
-        if (n.getEmpleado() == null) {
-            throw new IllegalArgumentException("empleado es obligatorio");
-        }
-        if (n.getPeriodo() == null || n.getPeriodo().trim().isEmpty()) {
-            throw new IllegalArgumentException("periodo es obligatorio");
-        }
-
-        double base = n.getDevengado() != null ? n.getDevengado().getBaseAmount() : 0.0;
-        double extras = n.getDevengado() != null ? n.getDevengado().getExtras() : 0.0;
-        double isr = n.getDeducciones() != null ? n.getDeducciones().getIsr() : 0.0;
-
-        if (base <= 0)
-            throw new IllegalArgumentException("devengado.base debe ser mayor a 0");
-        if (extras < 0)
-            throw new IllegalArgumentException("devengado.extras no puede ser negativo");
-        if (isr < 0)
-            throw new IllegalArgumentException("deducciones.isr no puede ser negativo");
+    // Obtener nómina por recibo ID
+    public Optional<Nomina> getNominaByReciboId(String reciboId) {
+        return nominaRepository.findByReciboId(reciboId);
     }
 
-    // ================== CREAR ==================
-    @Transactional
-    public Nomina crearNomina(Nomina n) {
+    // Obtener nóminas por empleado
+    public List<Nomina> getNominasByEmpleado(Long empleadoId) {
+        return nominaRepository.findByEmpleadoId(empleadoId);
+    }
 
-        if (nominaRepo.existsByReciboId(n.getReciboId())) {
-            throw new IllegalArgumentException("reciboId ya existe");
+    // Obtener nóminas por periodo
+    public List<Nomina> getNominasByPeriodo(String periodo) {
+        return nominaRepository.findByPeriodo(periodo);
+    }
+
+    // Crear nueva nómina
+    public Nomina createNomina(Nomina nomina) {
+        // Verificar que el recibo ID no exista
+        if (nomina.getReciboId() != null &&
+                nominaRepository.existsByReciboId(nomina.getReciboId())) {
+            throw new IllegalArgumentException("Ya existe una nómina con ese recibo ID");
         }
 
-        Empleado emp = n.getEmpleado();
-
-        if (emp.getId() != null) {
-            emp = empleadoRepo.findById(emp.getId())
-                    .orElseThrow(() -> new IllegalArgumentException("Empleado no encontrado por id"));
-
-        } else if (emp.getNumeroEmpleado() != null) {
-
-            Optional<Empleado> ex = empleadoRepo.findByNumeroEmpleado(emp.getNumeroEmpleado());
-            if (ex.isPresent()) {
-                emp = ex.get();
-            } else {
-                emp = empleadoRepo.save(emp);
+        // Verificar que el empleado existe
+        if (nomina.getEmpleado() != null && nomina.getEmpleado().getId() != null) {
+            Optional<Empleado> empleado = empleadoRepository.findById(nomina.getEmpleado().getId());
+            if (empleado.isEmpty()) {
+                throw new IllegalArgumentException("Empleado no encontrado");
             }
-
-        } else {
-            emp = empleadoRepo.save(emp);
+            // Asignar el empleado completo
+            nomina.setEmpleado(empleado.get());
         }
 
-        n.setEmpleado(emp);
-
-        validar(n);
-        n.setTotalNeto(calcularTotalNeto(n));
-
-        return nominaRepo.save(n);
+        return nominaRepository.save(nomina);
     }
 
-    // ================== LISTAR ==================
-    public List<Nomina> listarNominas() {
-        return nominaRepo.findAll();
+    // Actualizar nómina
+    public Optional<Nomina> updateNomina(Long id, Nomina nominaDetails) {
+        return nominaRepository.findById(id)
+                .map(nomina -> {
+                    // Actualizar campos - CORREGIDO: no comparar double con null
+                    if (nominaDetails.getReciboId() != null) {
+                        nomina.setReciboId(nominaDetails.getReciboId());
+                    }
+                    if (nominaDetails.getPeriodo() != null) {
+                        nomina.setPeriodo(nominaDetails.getPeriodo());
+                    }
+                    // Usar != null para Double (objeto)
+                    if (nominaDetails.getTotalNeto() != null) {
+                        nomina.setTotalNeto(nominaDetails.getTotalNeto());
+                    }
+                    if (nominaDetails.getDevengado() != null) {
+                        nomina.setDevengado(nominaDetails.getDevengado());
+                    }
+                    if (nominaDetails.getDeducciones() != null) {
+                        nomina.setDeducciones(nominaDetails.getDeducciones());
+                    }
+                    if (nominaDetails.getFechaRegistro() != null) {
+                        nomina.setFechaRegistro(nominaDetails.getFechaRegistro());
+                    }
+
+                    return nominaRepository.save(nomina);
+                });
     }
 
-    // ================== OBTENER ==================
-    public Nomina obtenerPorReciboId(String reciboId) {
-        return nominaRepo.findByReciboId(reciboId).orElse(null);
+    // Actualizar nómina por recibo ID
+    public Optional<Nomina> updateNominaByReciboId(String reciboId, Nomina nominaDetails) {
+        return nominaRepository.findByReciboId(reciboId)
+                .map(nomina -> {
+                    if (nominaDetails.getPeriodo() != null) {
+                        nomina.setPeriodo(nominaDetails.getPeriodo());
+                    }
+                    // CORREGIDO: no comparar double con null
+                    if (nominaDetails.getTotalNeto() != null) {
+                        nomina.setTotalNeto(nominaDetails.getTotalNeto());
+                    }
+                    if (nominaDetails.getDevengado() != null) {
+                        nomina.setDevengado(nominaDetails.getDevengado());
+                    }
+                    if (nominaDetails.getDeducciones() != null) {
+                        nomina.setDeducciones(nominaDetails.getDeducciones());
+                    }
+                    if (nominaDetails.getFechaRegistro() != null) {
+                        nomina.setFechaRegistro(nominaDetails.getFechaRegistro());
+                    }
+
+                    return nominaRepository.save(nomina);
+                });
     }
 
-    // ================== ACTUALIZAR ==================
-    @Transactional
-    public Nomina actualizarNomina(String reciboId, Nomina cambios) {
-
-        Nomina existente = nominaRepo.findByReciboId(reciboId)
-                .orElseThrow(() -> new IllegalArgumentException("No encontrado"));
-
-        // No permitir modificar totalNeto manualmente
-        cambios.setTotalNeto(0);
-
-        if (cambios.getPeriodo() != null)
-            existente.setPeriodo(cambios.getPeriodo());
-
-        if (cambios.getDevengado() != null)
-            existente.setDevengado(cambios.getDevengado());
-
-        if (cambios.getDeducciones() != null)
-            existente.setDeducciones(cambios.getDeducciones());
-
-        // Resolver empleado
-        if (cambios.getEmpleado() != null) {
-
-            Empleado e = cambios.getEmpleado();
-
-            if (e.getId() != null) {
-                e = empleadoRepo.findById(e.getId())
-                        .orElseThrow(() -> new IllegalArgumentException("Empleado no encontrado"));
-
-            } else if (e.getNumeroEmpleado() != null) {
-
-                Optional<Empleado> ex = empleadoRepo.findByNumeroEmpleado(e.getNumeroEmpleado());
-                if (ex.isPresent()) {
-                    e = ex.get();
-                } else {
-                    e = empleadoRepo.save(e);
-                }
-
-            } else {
-                e = empleadoRepo.save(e);
-            }
-
-            existente.setEmpleado(e);
+    // Eliminar nómina por ID
+    public boolean deleteNomina(Long id) {
+        if (nominaRepository.existsById(id)) {
+            nominaRepository.deleteById(id);
+            return true;
         }
-
-        validar(existente);
-        existente.setTotalNeto(calcularTotalNeto(existente));
-
-        return nominaRepo.save(existente);
+        return false;
     }
 
-    // ================== ELIMINAR ==================
-    @Transactional
-    public boolean eliminarPorReciboId(String reciboId) {
-        if (!nominaRepo.existsByReciboId(reciboId))
-            return false;
-
-        nominaRepo.deleteByReciboId(reciboId);
-        return true;
+    // Eliminar nómina por recibo ID
+    public boolean deleteNominaByReciboId(String reciboId) {
+        Optional<Nomina> nomina = nominaRepository.findByReciboId(reciboId);
+        if (nomina.isPresent()) {
+            nominaRepository.delete(nomina.get());
+            return true;
+        }
+        return false;
     }
 }

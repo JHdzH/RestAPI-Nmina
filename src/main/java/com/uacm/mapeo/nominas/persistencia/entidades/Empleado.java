@@ -1,36 +1,93 @@
+// src/main/java/com/uacm/mapeo/nominas/persistencia/entidades/Empleado.java
 package com.uacm.mapeo.nominas.persistencia.entidades;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.uacm.mapeo.nominas.persistencia.entidades.enums.*;
 import jakarta.persistence.*;
-import java.io.Serializable;
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import lombok.*;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
+
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
+
 @Entity
 @Table(name = "empleados")
-@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class Empleado {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable=false, unique=true)
+    @Column(name = "numero_empleado")
     private String numeroEmpleado;
 
-    @Column(nullable=false)
     private String nombre;
-
-    @Column
     private String puesto;
 
-    // getters y setters
-    public Long getId() { return id; }
-    public void setId(Long id) { this.id = id; }
+    // Nuevos campos
+    private String rfc;
+    private String curp;
+    private String nss;
 
-    public String getNumeroEmpleado() { return numeroEmpleado; }
-    public void setNumeroEmpleado(String numeroEmpleado) { this.numeroEmpleado = numeroEmpleado; }
+    @Column(name = "fecha_nacimiento")
+    private LocalDate fechaNacimiento;
 
-    public String getNombre() { return nombre; }
-    public void setNombre(String nombre) { this.nombre = nombre; }
+    @Enumerated(EnumType.STRING)
+    @Column(name = "tipo_contrato")
+    @Builder.Default
+    private TipoContrato tipoContrato = TipoContrato.INDETERMINADO;
 
-    public String getPuesto() { return puesto; }
-    public void setPuesto(String puesto) { this.puesto = puesto; }
+    @Column(name = "fecha_ingreso")
+    private LocalDate fechaIngreso;
+
+    @Column(name = "fecha_baja")
+    private LocalDate fechaBaja;
+
+    @Column(name = "salario_diario")
+    private Double salarioDiario;
+
+    @Column(name = "salario_mensual")
+    private Double salarioMensual;
+
+    @Enumerated(EnumType.STRING)
+    @Builder.Default
+    private RegimenContratacion regimen = RegimenContratacion.SUELDOS;
+
+    private String banco;
+
+    @Column(name = "cuenta_bancaria")
+    private String cuentaBancaria;
+
+    @Column(name = "clabe_interbancaria")
+    private String clabeInterbancaria;
+
+    private String email;
+    private String telefono;
+
+    @Enumerated(EnumType.STRING)
+    @Builder.Default
+    private EstatusEmpleado estatus = EstatusEmpleado.ACTIVO;
+
+    @CreationTimestamp
+    @Column(name = "created_at", updatable = false)
+    private LocalDateTime createdAt;
+
+    @UpdateTimestamp
+    @Column(name = "updated_at")
+    private LocalDateTime updatedAt;
+
+    // Relaciones - IGNORAR en JSON para evitar recursión
+    @OneToMany(mappedBy = "empleado", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
+    @JsonIgnore
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
+    private List<ContratoProyecto> contratosProyecto = new ArrayList<>();
 }

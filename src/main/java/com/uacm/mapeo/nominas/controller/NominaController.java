@@ -1,112 +1,97 @@
+// src/main/java/com/uacm/mapeo/nominas/controller/NominaController.java
 package com.uacm.mapeo.nominas.controller;
 
-
-import com.fasterxml.jackson.dataformat.xml.XmlMapper;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
 import com.uacm.mapeo.nominas.persistencia.entidades.Nomina;
 import com.uacm.mapeo.nominas.servicios.NominaService;
-import org.springframework.http.MediaType;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
 
-
-import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Optional;
 
 @RestController
-@RequestMapping("/api/v1/nominas")
+@RequestMapping("/api/nominas")
+@RequiredArgsConstructor
 public class NominaController {
 
     private final NominaService nominaService;
-    private final XmlMapper xmlMapper = new XmlMapper();
 
-    public NominaController(NominaService nominaService) {
-        this.nominaService = nominaService;
+    @GetMapping
+    public List<Nomina> getAllNominas() {
+        return nominaService.getAllNominas();
+    }
+
+    @GetMapping("/{id}")
+    public ResponseEntity<Nomina> getNominaById(@PathVariable Long id) {
+        Optional<Nomina> nomina = nominaService.getNominaById(id);
+        return nomina.map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
     }
 
     @PostMapping
-    public ResponseEntity<?> crear(@RequestBody Nomina n) {
+    public ResponseEntity<Nomina> createNomina(@RequestBody Nomina nomina) {
         try {
-            Nomina creado = nominaService.crearNomina(n);
-            return ResponseEntity.status(201).body(creado);
-        } catch (IllegalArgumentException ex) {
-            return ResponseEntity.badRequest().body(new ErrorResponse(ex.getMessage()));
-        } catch (Exception ex) {
-            return ResponseEntity.status(500).body(new ErrorResponse("Error interno: " + ex.getMessage()));
+            Nomina created = nominaService.createNomina(nomina);
+            return ResponseEntity.status(HttpStatus.CREATED).body(created);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().build();
         }
     }
 
-    @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
-    public List<Nomina> listar() {
-        return nominaService.listarNominas();
+    @PutMapping("/{id}")
+    public ResponseEntity<Nomina> updateNomina(
+            @PathVariable Long id,
+            @RequestBody Nomina nominaDetails) {
+
+        Optional<Nomina> updated = nominaService.updateNomina(id, nominaDetails);
+        return updated.map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
     }
 
-    @GetMapping("/{reciboId}")
-    public ResponseEntity<?> obtener(@PathVariable String reciboId) {
-        Nomina n = nominaService.obtenerPorReciboId(reciboId);
-        if (n == null)
-            return ResponseEntity.status(404).body(new ErrorResponse("No encontrado"));
-        return ResponseEntity.ok(n);
-    }
-
-    @PutMapping("/{reciboId}")
-    public ResponseEntity<?> actualizar(@PathVariable String reciboId,
-                                        @RequestBody Nomina cambios) {
-        try {
-            Nomina actualizado = nominaService.actualizarNomina(reciboId, cambios);
-            return ResponseEntity.ok(actualizado);
-        } catch (IllegalArgumentException ex) {
-            return ResponseEntity.status(404).body(new ErrorResponse(ex.getMessage()));
-        } catch (Exception ex) {
-            return ResponseEntity.status(500)
-                    .body(new ErrorResponse("Error interno: " + ex.getMessage()));
+    @DeleteMapping("/{id}")
+    public ResponseEntity<?> deleteNomina(@PathVariable Long id) {
+        if (nominaService.deleteNomina(id)) {
+            return ResponseEntity.ok().build();
         }
+        return ResponseEntity.notFound().build();
     }
 
-    @DeleteMapping("/{reciboId}")
-    public ResponseEntity<?> eliminar(@PathVariable String reciboId) {
-        boolean ok = nominaService.eliminarPorReciboId(reciboId);
-        if (!ok)
-            return ResponseEntity.status(404).body(new ErrorResponse("No encontrado"));
-        return ResponseEntity.noContent().build();
+    // Endpoints adicionales por recibo ID
+    @GetMapping("/recibo/{reciboId}")
+    public ResponseEntity<Nomina> getNominaByReciboId(@PathVariable String reciboId) {
+        Optional<Nomina> nomina = nominaService.getNominaByReciboId(reciboId);
+        return nomina.map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
     }
 
-    @GetMapping("/{reciboId}/xml")
-    public ResponseEntity<?> exportarXml(@PathVariable String reciboId) {
-        Nomina n = nominaService.obtenerPorReciboId(reciboId);
-        if (n == null)
-            return ResponseEntity.status(404).body(new ErrorResponse("No encontrado"));
+    @PutMapping("/recibo/{reciboId}")
+    public ResponseEntity<Nomina> updateNominaByReciboId(
+            @PathVariable String reciboId,
+            @RequestBody Nomina nominaDetails) {
 
-        try {
-            String xml = xmlMapper
-                    .writerWithDefaultPrettyPrinter()
-                    .writeValueAsString(n);
+        Optional<Nomina> updated = nominaService.updateNominaByReciboId(reciboId, nominaDetails);
+        return updated.map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
+    }
 
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_XML);
-            headers.set(
-                    HttpHeaders.CONTENT_DISPOSITION,
-                    "attachment; filename=recibo_" + reciboId + ".xml"
-            );
-
-            return ResponseEntity.ok()
-                    .headers(headers)
-                    .body(xml.getBytes(StandardCharsets.UTF_8));
-
-        } catch (Exception ex) {
-            return ResponseEntity.status(500)
-                    .body(new ErrorResponse(
-                            "Error serializando a XML: " + ex.getMessage()
-                    ));
+    @DeleteMapping("/recibo/{reciboId}")
+    public ResponseEntity<?> deleteNominaByReciboId(@PathVariable String reciboId) {
+        if (nominaService.deleteNominaByReciboId(reciboId)) {
+            return ResponseEntity.ok().build();
         }
+        return ResponseEntity.notFound().build();
     }
 
-    // Clase simple para errores
-    static class ErrorResponse {
-        public String error;
-        public ErrorResponse(String error) {
-            this.error = error;
-        }
+    // Endpoints de filtrado
+    @GetMapping("/empleado/{empleadoId}")
+    public List<Nomina> getNominasByEmpleado(@PathVariable Long empleadoId) {
+        return nominaService.getNominasByEmpleado(empleadoId);
+    }
+
+    @GetMapping("/periodo/{periodo}")
+    public List<Nomina> getNominasByPeriodo(@PathVariable String periodo) {
+        return nominaService.getNominasByPeriodo(periodo);
     }
 }
