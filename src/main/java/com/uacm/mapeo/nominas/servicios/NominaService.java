@@ -7,6 +7,7 @@ import com.uacm.mapeo.nominas.persistencia.repositorios.NominaRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
@@ -37,7 +38,7 @@ public class NominaService {
         return nominaRepository.findByEmpleadoId(empleadoId);
     }
 
-    // Obtener nóminas por periodo
+    // Obtener nóminas por periodo (string)
     public List<Nomina> getNominasByPeriodo(String periodo) {
         return nominaRepository.findByPeriodo(periodo);
     }
@@ -67,14 +68,13 @@ public class NominaService {
     public Optional<Nomina> updateNomina(Long id, Nomina nominaDetails) {
         return nominaRepository.findById(id)
                 .map(nomina -> {
-                    // Actualizar campos - CORREGIDO: no comparar double con null
+                    // Actualizar campos
                     if (nominaDetails.getReciboId() != null) {
                         nomina.setReciboId(nominaDetails.getReciboId());
                     }
                     if (nominaDetails.getPeriodo() != null) {
                         nomina.setPeriodo(nominaDetails.getPeriodo());
                     }
-                    // Usar != null para Double (objeto)
                     if (nominaDetails.getTotalNeto() != null) {
                         nomina.setTotalNeto(nominaDetails.getTotalNeto());
                     }
@@ -86,6 +86,9 @@ public class NominaService {
                     }
                     if (nominaDetails.getFechaRegistro() != null) {
                         nomina.setFechaRegistro(nominaDetails.getFechaRegistro());
+                    }
+                    if (nominaDetails.getEstatusNomina() != null) {
+                        nomina.setEstatusNomina(nominaDetails.getEstatusNomina());
                     }
 
                     return nominaRepository.save(nomina);
@@ -99,7 +102,6 @@ public class NominaService {
                     if (nominaDetails.getPeriodo() != null) {
                         nomina.setPeriodo(nominaDetails.getPeriodo());
                     }
-                    // CORREGIDO: no comparar double con null
                     if (nominaDetails.getTotalNeto() != null) {
                         nomina.setTotalNeto(nominaDetails.getTotalNeto());
                     }
@@ -111,6 +113,9 @@ public class NominaService {
                     }
                     if (nominaDetails.getFechaRegistro() != null) {
                         nomina.setFechaRegistro(nominaDetails.getFechaRegistro());
+                    }
+                    if (nominaDetails.getEstatusNomina() != null) {
+                        nomina.setEstatusNomina(nominaDetails.getEstatusNomina());
                     }
 
                     return nominaRepository.save(nomina);
@@ -134,5 +139,57 @@ public class NominaService {
             return true;
         }
         return false;
+    }
+
+    // Obtener nóminas por período (rango de fechas)
+    public List<Nomina> getNominasPorPeriodo(LocalDate inicio, LocalDate fin) {
+        return nominaRepository.findByPeriodoInicioBetween(inicio, fin);
+    }
+
+    // Obtener nóminas por mes y año
+    public List<Nomina> getNominasPorMes(int year, int month) {
+        LocalDate inicio = LocalDate.of(year, month, 1);
+        LocalDate fin = inicio.withDayOfMonth(inicio.lengthOfMonth());
+        return nominaRepository.findByPeriodoInicioBetween(inicio, fin);
+    }
+
+    // Cambiar estatus de nómina
+    public Nomina cambiarEstatus(Long id, String estatus) {
+        Nomina nomina = nominaRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Nómina no encontrada con ID: " + id));
+
+        // Validar que el estatus sea válido
+        List<String> estatusValidos = List.of("CALCULADA", "PAGADA", "CANCELADA", "BORRADOR");
+        if (!estatusValidos.contains(estatus.toUpperCase())) {
+            throw new IllegalArgumentException("Estatus no válido. Valores permitidos: " + estatusValidos);
+        }
+
+        nomina.setEstatusNomina(estatus);
+        return nominaRepository.save(nomina);
+    }
+
+    // Obtener nóminas por estatus
+    public List<Nomina> getNominasByEstatus(String estatus) {
+        return nominaRepository.findByEstatusNomina(estatus);
+    }
+
+    // Verificar si existe nómina para un empleado en un período
+    public boolean existsNominaForEmpleadoInPeriod(Long empleadoId, LocalDate inicio, LocalDate fin) {
+        return nominaRepository.existsByEmpleadoIdAndPeriodoInicioBetween(
+                empleadoId, inicio, fin);
+    }
+
+    // Obtener nóminas pendientes de pago
+    public List<Nomina> getNominasPendientes() {
+        return nominaRepository.findByEstatusNomina("CALCULADA");
+    }
+
+    // Obtener total de nóminas pagadas en un período
+    public double getTotalPagadoEnPeriodo(LocalDate inicio, LocalDate fin) {
+        List<Nomina> nominas = nominaRepository.findByEstatusNominaAndPeriodoInicioBetween(
+                "PAGADA", inicio, fin);
+        return nominas.stream()
+                .mapToDouble(Nomina::getTotalNeto)
+                .sum();
     }
 }
